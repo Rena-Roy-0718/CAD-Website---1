@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CAD Triangle Tool</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:sans-serif;background:#f0f0f0;display:flex;align-items:center;justify-content:center;min-height:100vh}
+#app{display:flex;height:560px;width:820px;border:1px solid #ddd;border-radius:10px;overflow:hidden;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,0.08)}
+#sidebar{width:220px;min-width:220px;border-right:1px solid #eee;display:flex;flex-direction:column;overflow-y:auto;background:#fff}
+.panel{padding:12px 14px;border-bottom:1px solid #eee}
+.panel-title{font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px}
+.row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px}
+.row label{font-size:13px;color:#666;white-space:nowrap}
+.row input[type=range]{flex:1;accent-color:#378ADD}
+.row span{font-size:13px;font-weight:500;min-width:32px;text-align:right;color:#222}
+.seg{display:flex;border:1px solid #ddd;border-radius:6px;overflow:hidden}
+.seg button{flex:1;padding:6px 0;font-size:13px;border:none;background:transparent;color:#888;cursor:pointer;transition:background 0.15s}
+.seg button.active{background:#f0f0f0;color:#111;font-weight:500}
+.color-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+.swatch{width:100%;aspect-ratio:1;border-radius:4px;border:2px solid transparent;cursor:pointer;transition:border-color 0.1s}
+.swatch.active{border-color:#111}
+#canvas-wrap{flex:1;position:relative;background:#f8f9fa}
+canvas{display:block;cursor:crosshair}
+
+/* ── Toolbar: sits over the canvas, blends with the drawing sheet ── */
+#toolbar{
+  position:absolute;
+  top:10px;
+  left:50%;
+  transform:translateX(-50%);
+  display:flex;
+  gap:6px;
+  background:rgba(255,255,255,0.92);
+  border:1px solid #ddd;
+  border-radius:10px;
+  padding:6px 10px;
+  backdrop-filter:blur(4px);
+  -webkit-backdrop-filter:blur(4px);
+}
+#toolbar button{
+  padding:5px 14px;
+  font-size:13px;
+  border:1px solid #ddd;
+  border-radius:6px;
+  background:transparent;
+  color:#333;
+  cursor:pointer;
+  transition:background 0.15s;
+}
+#toolbar button:hover{background:rgba(0,0,0,0.06)}
+#toolbar button.danger{color:#c0392b;border-color:#f5c6c6}
+#toolbar button.danger:hover{background:#fef0f0}
+
+#status{
+  position:absolute;
+  bottom:10px;
+  left:50%;
+  transform:translateX(-50%);
+  font-size:12px;
+  color:#888;
+  background:rgba(255,255,255,0.88);
+  padding:4px 12px;
+  border-radius:20px;
+  border:1px solid #eee;
+  white-space:nowrap;
+  backdrop-filter:blur(4px);
+}
+.saved-list{max-height:140px;overflow-y:auto}
+.saved-item{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #eee;cursor:pointer}
+.saved-item:last-child{border-bottom:none}
+.saved-item:hover{background:#fafafa}
+.saved-thumb{width:22px;height:22px;flex-shrink:0}
+.saved-label{font-size:12px;color:#666;flex:1}
+.saved-del{font-size:16px;color:#aaa;background:none;border:none;cursor:pointer;padding:0 2px;line-height:1}
+.saved-del:hover{color:#c0392b}
+.empty-msg{font-size:12px;color:#bbb;padding:4px 0}
+input[type=color]{width:36px;height:28px;border:1px solid #ddd;border-radius:4px;cursor:pointer;padding:1px}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="sidebar">
+
+    <div class="panel">
+      <div class="panel-title">Style</div>
+      <div class="row"><label>Fill type</label></div>
+      <div class="seg" id="fill-seg">
+        <button class="active" data-val="filled" onclick="setFill('filled',this)">Filled</button>
+        <button data-val="hollow" onclick="setFill('hollow',this)">Hollow</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Colour</div>
+      <div class="color-grid" id="color-grid"></div>
+      <div class="row" style="margin-top:10px">
+        <label>Custom</label>
+        <input type="color" id="custom-color" value="#378ADD">
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Size</div>
+      <div class="row">
+        <label>Scale</label>
+        <input type="range" id="size-slider" min="30" max="220" step="1" value="100">
+        <span id="size-val">100</span>
+      </div>
+      <div class="row">
+        <label>Stroke</label>
+        <input type="range" id="stroke-slider" min="1" max="12" step="1" value="2">
+        <span id="stroke-val">2</span>
+      </div>
+    </div>
+
+    <div class="panel" style="flex:1">
+      <div class="panel-title">Saved shapes</div>
+      <div class="saved-list" id="saved-list"><p class="empty-msg">No shapes saved yet.</p></div>
+    </div>
+
+  </div>
+
+  <div id="canvas-wrap">
+    <div id="toolbar">
+      <button onclick="saveShape()">💾 Save</button>
+      <button onclick="clearCanvas()">Clear</button>
+      <button class="danger" onclick="deleteSelected()">🗑 Delete</button>
+    </div>
+    <canvas id="c"></canvas>
+    <div id="status">Click to place triangle</div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const wrap = document.getElementById('canvas-wrap');
+
+let state = {
+  color: '#378ADD',
+  fillType: 'filled',
+  size: 100,
+  stroke: 2,
+  shapes: [],
+  selected: null,
+  dragging: false,
+  dragOffX: 0,
+  dragOffY: 0,
+  cursor: null
+};
+
+const PALETTE = [
+  '#E24B4A','#D85A30','#EF9F27','#639922',
+  '#1D9E75','#378ADD','#7F77DD','#D4537E',
+  '#888780','#2C2C2A','#185FA5','#3C3489'
+];
+
+function initPalette() {
+  const grid = document.getElementById('color-grid');
+  grid.innerHTML = '';
+  PALETTE.forEach(c => {
+    const swatch = document.createElement('div');
+    swatch.className = 'swatch' + (c === state.color ? ' active' : '');
+    swatch.style.background = c;
+    swatch.onclick = () => {
+      state.color = c;
+      document.getElementById('custom-color').value = c;
+      document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+      swatch.classList.add('active');
+      updateSelected();
+    };
+    grid.appendChild(swatch);
+  });
+}
+initPalette();
+
+document.getElementById('custom-color').addEventListener('input', e => {
+  state.color = e.target.value;
+  document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+  updateSelected();
+});
+
+function setFill(val, btn) {
+  state.fillType = val;
+  document.querySelectorAll('#fill-seg button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  updateSelected();
+}
+
+document.getElementById('size-slider').addEventListener('input', e => {
+  state.size = +e.target.value;
+  document.getElementById('size-val').textContent = state.size;
+  if (state.selected !== null) state.shapes[state.selected].size = state.size;
+  redraw();
+});
+
+document.getElementById('stroke-slider').addEventListener('input', e => {
+  state.stroke = +e.target.value;
+  document.getElementById('stroke-val').textContent = state.stroke;
+  if (state.selected !== null) state.shapes[state.selected].stroke = state.stroke;
+  redraw();
+});
+
+function resize() {
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+  redraw();
+}
+new ResizeObserver(resize).observe(wrap);
+resize();
+
+function triPoints(x, y, s) {
+  const h = s * 0.866;
+  return [
+    [x, y - s * 0.6],
+    [x - s / 2, y + h * 0.4],
+    [x + s / 2, y + h * 0.4]
+  ];
+}
+
+function drawTri(x, y, s, color, fillType, stroke, alpha = 1) {
+  const pts = triPoints(x, y, s);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  ctx.lineTo(pts[1][0], pts[1][1]);
+  ctx.lineTo(pts[2][0], pts[2][1]);
+  ctx.closePath();
+  if (fillType === 'filled') { ctx.fillStyle = color; ctx.fill(); }
+  ctx.strokeStyle = color;
+  ctx.lineWidth = stroke;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawHandle(x, y, s) {
+  const pts = triPoints(x, y, s);
+  ctx.save();
+  ctx.strokeStyle = '#378ADD';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  ctx.lineTo(pts[1][0], pts[1][1]);
+  ctx.lineTo(pts[2][0], pts[2][1]);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function redraw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  state.shapes.forEach((sh, i) => {
+    drawTri(sh.x, sh.y, sh.size, sh.color, sh.fillType, sh.stroke);
+    if (i === state.selected) drawHandle(sh.x, sh.y, sh.size);
+  });
+  if (state.cursor) {
+    drawTri(state.cursor.x, state.cursor.y, state.size, state.color, state.fillType, state.stroke, 0.45);
+  }
+}
+
+function hitTest(mx, my, sh) {
+  const pts = triPoints(sh.x, sh.y, sh.size);
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if ((yi > my) !== (yj > my) && mx < ((xj - xi) * (my - yi)) / (yj - yi) + xi)
+      inside = !inside;
+  }
+  return inside;
+}
+
+canvas.addEventListener('mousemove', e => {
+  const r = canvas.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  if (state.dragging && state.selected !== null) {
+    state.shapes[state.selected].x = mx - state.dragOffX;
+    state.shapes[state.selected].y = my - state.dragOffY;
+    redraw(); return;
+  }
+  let hit = false;
+  for (let i = state.shapes.length - 1; i >= 0; i--) {
+    if (hitTest(mx, my, state.shapes[i])) { canvas.style.cursor = 'move'; hit = true; break; }
+  }
+  if (!hit) { canvas.style.cursor = 'crosshair'; state.cursor = { x: mx, y: my }; }
+  else state.cursor = null;
+  redraw();
+});
+
+canvas.addEventListener('mouseleave', () => { state.cursor = null; redraw(); });
+
+canvas.addEventListener('mousedown', e => {
+  const r = canvas.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  for (let i = state.shapes.length - 1; i >= 0; i--) {
+    if (hitTest(mx, my, state.shapes[i])) {
+      state.selected = i;
+      state.dragging = true;
+      state.dragOffX = mx - state.shapes[i].x;
+      state.dragOffY = my - state.shapes[i].y;
+      syncSidebar(); redraw(); return;
+    }
+  }
+  state.shapes.push({ x: mx, y: my, size: state.size, color: state.color, fillType: state.fillType, stroke: state.stroke, saved: false });
+  state.selected = state.shapes.length - 1;
+  state.cursor = null;
+  setStatus('Triangle placed — click Save to keep it');
+  syncSidebar(); redraw();
+});
+
+canvas.addEventListener('mouseup', () => { state.dragging = false; });
+
+function syncSidebar() {
+  if (state.selected !== null) {
+    const sh = state.shapes[state.selected];
+    document.getElementById('size-slider').value = sh.size;
+    document.getElementById('size-val').textContent = sh.size;
+    document.getElementById('stroke-slider').value = sh.stroke;
+    document.getElementById('stroke-val').textContent = sh.stroke;
+    state.color = sh.color; state.fillType = sh.fillType;
+    state.size = sh.size; state.stroke = sh.stroke;
+    document.querySelectorAll('#fill-seg button').forEach(b => b.classList.toggle('active', b.dataset.val === sh.fillType));
+    document.getElementById('custom-color').value = sh.color;
+  }
+}
+
+function updateSelected() {
+  if (state.selected !== null) {
+    state.shapes[state.selected].color = state.color;
+    state.shapes[state.selected].fillType = state.fillType;
+    redraw();
+  }
+}
+
+function saveShape() {
+  if (state.selected === null) { setStatus('Select or place a triangle first'); return; }
+  state.shapes[state.selected].saved = true;
+  renderSavedList();
+  setStatus('Shape saved!');
+}
+
+function deleteSelected() {
+  if (state.selected === null) { setStatus('Nothing selected'); return; }
+  state.shapes.splice(state.selected, 1);
+  state.selected = null;
+  renderSavedList();
+  setStatus('Shape deleted');
+  redraw();
+}
+
+function clearCanvas() {
+  state.shapes = []; state.selected = null; state.cursor = null;
+  renderSavedList(); setStatus('Canvas cleared'); redraw();
+}
+
+function renderSavedList() {
+  const el = document.getElementById('saved-list');
+  const hasSaved = state.shapes.some(s => s.saved);
+  if (!hasSaved) { el.innerHTML = '<p class="empty-msg">No shapes saved yet.</p>'; return; }
+  el.innerHTML = '';
+  state.shapes.forEach((sh, i) => {
+    if (!sh.saved) return;
+    const row = document.createElement('div');
+    row.className = 'saved-item';
+    const tc = document.createElement('canvas');
+    tc.className = 'saved-thumb'; tc.width = 22; tc.height = 22;
+    const tx = tc.getContext('2d');
+    const pts = triPoints(11, 12, 16);
+    tx.beginPath(); tx.moveTo(pts[0][0],pts[0][1]); tx.lineTo(pts[1][0],pts[1][1]); tx.lineTo(pts[2][0],pts[2][1]); tx.closePath();
+    if (sh.fillType === 'filled') { tx.fillStyle = sh.color; tx.fill(); }
+    tx.strokeStyle = sh.color; tx.lineWidth = 1.5; tx.stroke();
+    const lbl = document.createElement('span');
+    lbl.className = 'saved-label';
+    lbl.textContent = `Triangle ${i + 1} (${sh.size}px)`;
+    const del = document.createElement('button');
+    del.className = 'saved-del'; del.innerHTML = '×'; del.title = 'Delete';
+    del.onclick = ev => {
+      ev.stopPropagation();
+      state.shapes.splice(i, 1);
+      if (state.selected === i) state.selected = null;
+      else if (state.selected > i) state.selected--;
+      renderSavedList(); redraw();
+    };
+    row.onclick = () => { state.selected = i; syncSidebar(); redraw(); };
+    row.appendChild(tc); row.appendChild(lbl); row.appendChild(del);
+    el.appendChild(row);
+  });
+}
+
+function setStatus(msg) {
+  document.getElementById('status').textContent = msg;
+}
+</script>
+</body>
+</html>
