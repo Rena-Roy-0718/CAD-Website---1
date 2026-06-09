@@ -46,16 +46,6 @@ cad-triangle-tool/
 └── README.md
 ```
 
-## Roadmap
-
-Planned increments:
-
-- [ ] Increment 2 — Additional shapes (rectangle, circle, line)
-- [ ] Increment 3 — Grid and snap-to-grid
-- [ ] Increment 4 — Undo / redo
-- [ ] Increment 5 — Zoom and pan
-- [ ] Increment 6 — Export to PNG / SVG
-
 ## Browser Support
 
 Works in any modern browser — Chrome, Firefox, Edge, and Safari.
