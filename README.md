@@ -18,7 +18,7 @@ A lightweight browser-based CAD tool for drawing, styling, and managing triangle
 No installation needed. Just open the file in any modern browser:
 
 ```bash
-open cad-triangle-tool.html
+open CAD Website - 1.html
 ```
 
 Or drag and drop `cad-triangle-tool.html` into Chrome, Firefox, Edge, or Safari.
