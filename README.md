@@ -58,7 +58,7 @@ Planned increments:
 
 ## Browser Support
 
-Works in any browser that supports the HTML5 Canvas API and `ResizeObserver` — Chrome, Firefox, Edge, Safari (all modern versions).
+Works in any modern browser — Chrome, Firefox, Edge, and Safari.
 
 ## Author
 
