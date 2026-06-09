@@ -40,10 +40,15 @@ Or drag and drop `CAD Website - 1.html` into Chrome, Firefox, Edge, or Safari.
 ## Project Structure
 
 ```
-cad-triangle-tool/
-├── CAD Website - 1.html   # Main application (self-contained)
+CAD-Website---1/
+├── CAD Website - 1.html
 ├── .gitignore
-└── README.md
+├── README.md
+└── Screenshots/
+    ├── blank page.png
+    ├── Sample 1.png
+    ├── Sample 2.png
+    └── Sample 3.png
 ```
 
 ## Browser Support
